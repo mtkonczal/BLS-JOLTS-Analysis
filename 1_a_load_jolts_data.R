@@ -2,8 +2,10 @@
 # Code to read in JOLTS data from CPS website and begin analysis.
 # This file reads in and store all the JOLTS monthly jobs data.
 #
+# Recent fix: added email to calls to work with new BLS protocols.
+#
 # Mike Konczal
-# Last updated 8/30/22
+# Last updated 5/1/2023
 
 library(janitor)
 library(tidyverse)

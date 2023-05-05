@@ -97,9 +97,11 @@ merged %>%
 ggsave("graphics/regression_line.png", dpi="retina", width = 12, height=6.75, units = "in")
 
 
+#a <- jolts %>% filter(series_id == "JTS100000000000000QUR") %>% select(DATE = date, quits_prior = value)
+#prior_eci <- read_csv("data/ecI_prior.csv") %>% left_join(a, by="DATE")
+#write.csv(prior_eci, "data/eci_prior.csv")
 
-
-prior_eci <- read_csv("data/ecI_prior.csv") %>%
+prior_eci <- read_csv("data/eci_prior.csv") %>%
   rename(eci_prior = ECIWAG_20230131, date = DATE) %>%
   mutate(date = date %m+% months(2), eci_prior = as.numeric(eci_prior))
 
@@ -131,3 +133,8 @@ merged %>% left_join(prior_eci, by="date") %>% mutate(eci_prior = eci_prior/lag(
 
 
 ggsave("graphics/regression_line_contrast.png", dpi="retina", width = 12, height=6.75, units = "in")
+
+prior_quits <- read_csv("data/eci_prior.csv") %>% select(date = DATE, quits_prior)
+
+jolts %>% filter(series_id == "JTS100000000000000QUR") %>% left_join(prior_quits, by="date") %>% select(date, value, quits_prior) %>%
+  filter(!is.na(quits_prior)) %>% summarize(sum(value - quits_prior))

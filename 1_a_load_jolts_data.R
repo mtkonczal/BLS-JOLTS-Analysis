@@ -46,13 +46,18 @@ data_element <- GET("https://download.bls.gov/pub/time.series/jt/jt.dataelement"
   fread()
 data_element <- data_element %>% clean_names()
 
+Jstate <- GET("https://download.bls.gov/pub/time.series/jt/jt.state", user_agent("rortybomb@gmail.com")) %>%
+  content(as = "text") %>%
+  fread()
+
 jolts <- jolts_data %>%
   inner_join(series, by = c("series_id")) %>%
   inner_join(data_element, by = c("dataelement_code"),suffix = c(".series", ".data_element"),) %>%
   inner_join(Jindustry, by = c("industry_code"),suffix = c(".x", ".industry_code"),) %>%
-  inner_join(Jsizecode, by = "sizeclass_code")
+  inner_join(Jsizecode, by = "sizeclass_code") %>%
+  inner_join(Jstate, by="state_code")
 
-rm(series, data_element, Jsizecode)
+rm(series, data_element, Jsizecode, Jstate)
 
 
 ######## GET UNEMPLOYMENT NUMBER ########

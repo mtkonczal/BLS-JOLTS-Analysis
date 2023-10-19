@@ -47,3 +47,14 @@ Merged %>%
   facet_wrap(~industry_text) + geom_smooth(method = "lm")
 
 Merged %>% pivot_wider(names_from = "data")
+
+
+#### State level JOLTS! ####
+
+unique(jolts$state_text)
+
+b <- jolts %>% filter(!is.na(date), seasonal == "S") %>% group_by(state_text, seasonal) %>%
+  summarize(n())
+a <- jolts %>% filter(state_text == "Illinois", !is.na(date)) %>% filter(date == max(date))
+
+View((a[date==max(date)])

@@ -6,6 +6,7 @@ library(ggtext)
 library(hrbrthemes)
 library(scales)
 library(ggrepel)
+library(quantmod)
 
 theme_lass <-   theme_modern_rc() + theme(legend.position = "none", legend.title = element_blank(),
                                           panel.grid.major.y = element_line(size=0.5),
@@ -32,8 +33,7 @@ theme_lass <-   theme_modern_rc() + theme(legend.position = "none", legend.title
 source("1_a_load_jolts_data.R")
 
 #### THE KEY INDICATORS VERSUS 2018-2019 ###
-toplines_rates <- c("JTS100000000000000HIR","JTS000000000000000JOR","JTS000000000000000LDR","JTS000000000000000OSR","JTS000000000000000QUR","JTS000000000000000TSR","JTS000000000000000UOR")
-
+toplines_rates <- c("JTS100000000000000HIR","JTS100000000000000JOR","JTS000000000000000LDR","JTS000000000000000OSR","JTS100000000000000QUR","JTS000000000000000TSR","JTS000000000000000UOR")
 
 
 MI_dates <- jolts %>% filter(date > "2020-12-01")
@@ -46,7 +46,7 @@ baseline_2019 <- jolts %>% filter(period != "M13", seasonal == "S",
                                   series_id %in% toplines_rates) %>%
   mutate(value = value/100) %>%
   filter(year == 2019) %>%
-  group_by(dataelement_text) %>%
+  group_by(series_id) %>%
   summarize(avg_2019 = mean(value)) %>%
   ungroup()
 
@@ -56,7 +56,7 @@ jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R",
                  series_id %in% toplines_rates) %>%
   mutate(value = value/100) %>%
   filter(year >= 2021) %>%
-  left_join(baseline_2019, by="dataelement_text") %>%
+  left_join(baseline_2019, by="series_id") %>%
   ggplot(aes(date, value)) + geom_line() + facet_wrap(~dataelement_text, scales = "free_y") +
   theme_lass +
   geom_line(aes(date, avg_2019), color="red", linetype="dashed") +
@@ -75,12 +75,12 @@ jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R",
                  series_id %in% c("JTS100000000000000HIR","JTS100000000000000QUR","JTS100000000000000JOR")) %>%
   mutate(value = value/100) %>%
   filter(year >= 2021) %>%
-  left_join(baseline_2019, by="dataelement_text") %>%
+  left_join(baseline_2019, by="series_id") %>%
   mutate(dataelement_textF = factor(dataelement_text, levels = c("Hires", "Quits", "Job openings"))) %>%
-  ggplot(aes(date, value)) + geom_line() + facet_wrap(~dataelement_textF, scales="free") +
+  ggplot(aes(date, value)) + geom_line(size = 1.2) + facet_wrap(~dataelement_textF, scales="free") +
   theme_lass +
-  geom_line(aes(date, avg_2019), color="red", linetype="dashed") +
-  labs(title="Key JOLTs Measures Are Falling",
+  geom_line(aes(date, avg_2019), color="red", linetype="dashed", size = 1.2) +
+  labs(title="Key JOLTs Measures Are Falling in 2023",
        subtitle="Blue line is actual monthly value, total private; Red line is average value across 2019",
        caption="BLS, JOLTS, seasonally-adjusted, author's calculations, Mike Konczal, Roosevelt Institute") +
   #scale_y_continuous(labels = scales::percent_format(accuracy = 0.1L)) +
@@ -147,12 +147,15 @@ ggsave("graphics/jolts_bc_narrow.png", width = 12, height=6.75, dpi="retina")
 jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R") %>%
   #mutate(last_date = if_else(date >= max(date) %m-% months(month_delay),date,as_date(NA))) %>%
   mutate(decade = floor(year/10),0) %>%
-  mutate(date_label = if_else(date == max(date), value, as.double(NA))) %>%
-  mutate(decade = decade*10, decade = paste(as.character(decade), "s", sep=""), decade = as.factor(decade)) %>%
+  mutate(date_label = if_else(date == max(date), format(date, "%B, %Y"), as.character(NA))) %>%
+  mutate(decade = decade*10, decade = paste(as.character(decade), "s", sep="")) %>%
+  mutate(decade = if_else(date==max(date), format(date, "%B, %Y"), decade)) %>%
+  mutate(decade = as.factor(decade)) %>%
+  mutate(last = if_else(date == max(date), urate/100, as.numeric(NA))) %>%
   filter(series_id %in% c("JTS100000000000000QUR")) %>%
   mutate(value = value/100, urate = urate/100) %>%
-  ggplot(aes(x=urate, y=value, color=decade)) + geom_point() + geom_path() +
-  labs(title="The Beveridge Curve Using Quits Is Returning to Trend",
+  ggplot(aes(x=urate, y=value, color=decade, label=date_label)) + geom_point(alpha=0.5) + geom_point(aes(last, value,size=3), show.legend = FALSE) +
+  labs(title="The Beveridge Curve Using Quits Has Returned to Trend",
        subtitle="Quits rate verus unemployment rate.",
        x="Unemployment Rate", y="",
        caption="BLS, JOLTS, seasonally-adjusted, author's calculations, Mike Konczal, Roosevelt Institute") +
@@ -163,8 +166,9 @@ jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R") %>%
         axis.title.x = element_text(size=15, margin = margin(t = 20, r = 0, b = 0, l = 0))
   ) +
   theme(panel.grid.minor = element_blank()) + theme(panel.grid.major = element_blank()) +
-  theme(legend.position = "bottom") #+
-#geom_text_repel(aes(label=format(date_label, format = "%b\n%Y")), color="skyblue")
+  theme(legend.position = "bottom") +
+  scale_colour_brewer() #+
+  #geom_text_repel()
 
 ggsave("graphics/jolts_quits_bc.png", width = 12, height=6.75, dpi="retina")
 
@@ -184,6 +188,9 @@ jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R") %>%
   scale_y_continuous(labels = scales::percent)
 
 ggsave("graphics/jolts2_openings_industry.png", width = 9.5, height=5.34, dpi="retina")
+
+
+
 
 
 ###### HIRING BY INDUSTRY
@@ -275,7 +282,7 @@ jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R") %>%
   ggplot(aes(date, value)) + geom_line() + facet_wrap(~industry_text, scales = "free_y") +
   theme_lass +
   geom_line(aes(date, avg_2019), color="red", linetype="dashed") +
-  labs(title="Job Opening Rate is Decreasing Across Industries",
+  labs(title="Job Openings Increase in Retail and Health Last Month",
        subtitle="Blue line is within 2022; Red line is average across 2019",
        caption="BLS, JOLTS, seasonally-adjusted, author's calculations, Mike Konczal, Roosevelt Institute") +
   scale_y_continuous(labels = scales::percent_format(accuracy = 0.1L))
@@ -291,10 +298,10 @@ jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R") %>%
   mutate(decade = decade*10, decade = paste(as.character(decade), "s", sep=""), decade = as.factor(decade)) %>%
   filter(series_id %in% c("JTS000000000000000JOR")) %>%
   mutate(value = value/100, urate = urate/100) %>%
-  filter(month(date) %in% c(2,5,8,11)) %>%
+  #filter(month(date) %in% c(2,5,8,11)) %>%
   ggplot(aes(x=urate, y=value, color=decade)) + geom_point() + geom_path() +
-  labs(title="That's Chris Waller's Music! The Beveridge Curve Is Steep When V-U Is High",
-       subtitle="Total job opening rate verus unemployment rate, end of quarter values starting February",
+  labs(title="That's Chris Waller's Music! Beveridge Curve Is Steep When V-U Is High",
+       subtitle="Total job opening rate verus unemployment rate",
        x="Unemployment Rate", y="",
        caption="Displayed values are Feb, May, Aug, Nov, end of period. BLS, JOLTS, seasonally-adjusted, Mike Konczal, Roosevelt Institute") +
   scale_y_continuous(labels = scales::percent) +
@@ -309,9 +316,9 @@ jolts %>% filter(period != "M13", seasonal == "S", ratelevel_code == "R") %>%
 ggsave("graphics/jolts_bc_quarters.png", width = 12, height=6.75, dpi="retina")
 
 
-View(jolts %>% filter(series_id %in% c("JTS000000000000000JOR","JTS100000000000000JOR"),
-                      date > "2022-01-01") %>%
-       select(date, urate, value, series_id))
+#View(jolts %>% filter(series_id %in% c("JTS000000000000000JOR","JTS100000000000000JOR"),
+#                      date > "2022-01-01") %>%
+#       select(date, urate, value, series_id))
 
 
 
@@ -341,3 +348,162 @@ jolts %>% filter(series_id %in% c("JTS100000000000000QUR")) %>%
   geom_text_repel(show.legend = FALSE, size=4)
 
 ggsave("graphics/jolts_bc_quits.png", width = 10, height=6.75, dpi="retina")
+
+
+
+#### Phillips Curve - Overall ####
+jolts_pc <- jolts %>%
+  filter(series_id == "JTS000000000000000JOR") %>%
+  mutate(v_u = value / urate) %>%
+  select(date, v_u)
+
+getSymbols("CPILFESL", src = "FRED")
+core_cpi_df <- data.frame(date = index(CPILFESL), core_cpi = coredata(CPILFESL))
+core_cpi_tibble <- as_tibble(core_cpi_df) %>%
+  rename(core_cpi = CPILFESL) %>%
+  mutate(core_cpi = core_cpi / lag(core_cpi, 3), core_cpi = core_cpi^4 - 1)
+
+jolts_pc <- jolts_pc %>% left_join(core_cpi_tibble, by = "date")
+
+jolts_pc_lm <- lm(core_cpi ~ I(v_u^2), data = jolts_pc)
+summary(jolts_pc_lm)
+jolts_pc$predicted <- predict(jolts_pc_lm, jolts_pc)
+
+
+jolts_pc %>%
+  mutate(recent = date > max(date) %m-% months(4)) %>%
+  mutate(recent_v_u = if_else(recent, v_u, as.double(NA))) %>%
+  mutate(label = if_else(date == max(date), format(date, "%b,\n%Y"), as.character(NA))) %>%
+  mutate(color_pandemic = if_else(year(date) >= 2021, "2021-", "2000-2020")) %>%
+  mutate(last_value = if_else(date == max(date), v_u, as.double(NA))) %>%
+  ggplot(aes(v_u, core_cpi, label = label)) +
+  geom_point(aes(color = color_pandemic)) +
+  theme_lass +
+  geom_line(aes(v_u, predicted), show.legend = FALSE) +
+  geom_path(aes(recent_v_u, core_cpi), color = "pink") +
+  geom_text_repel(color = "pink") +
+  geom_point(aes(last_value, core_cpi), color = "pink", show.legend = FALSE) +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Sliding off the Nonlinear Beveridge-Phillips Curve",
+    subtitle = "3-month core CPI change versus Vacancies-to-Unemployment Ratio, 2000 - Current",
+    x = "Vacancy-to-unemployment ratio", y = "3-month core CPI change",
+    caption = "BLS, Seasonally Adjusted, Mike Konczal, Roosevelt Institute"
+  ) +
+  theme(
+    axis.text.x = element_text(size = 15, face = "bold"),
+    axis.text.y = element_text(size = 15, face = "bold"),
+    axis.title.x = element_text(size = 15, margin = margin(t = 20, r = 0, b = 0, l = 0)),
+    axis.title.y = element_text(size = 14, angle = 90, color = "white", vjust = 3)
+  ) +
+  theme(panel.grid.minor = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(legend.position = c(0.7, 0.8))
+
+ggsave("graphics/jolts_PC.png", width = 12, height = 12, dpi = "retina")
+
+#### Phillips Curve - Factors ####
+jolts_pc <- jolts %>% filter(series_id == "JTS000000000000000JOR") %>%
+  mutate(v_u = value/urate) %>%
+  select(date, v_u)
+
+load("data/last_cpi_data.RData")
+
+core_cpi_df <- data.frame(date=index(CPILFESL), core_cpi=coredata(CPILFESL))
+core_cpi_tibble <- as_tibble(core_cpi_df) %>% rename( core_cpi = CPILFESL) %>%
+  mutate(core_cpi = core_cpi/lag(core_cpi,3), core_cpi = core_cpi^4-1)
+
+jolts_pc <- jolts_pc %>% left_join(core_cpi_tibble, by="date")
+
+jolts_pc_lm <- lm(core_cpi ~ I(v_u^2), data=jolts_pc)
+summary(jolts_pc_lm)
+jolts_pc$predicted <- predict(jolts_pc_lm, jolts_pc)
+
+jolts_pc %>% mutate(recent = date > max(date) %m-% months(4)) %>%
+  mutate(recent_v_u = if_else(recent, v_u, as.double(NA))) %>%
+  mutate(label = if_else(date==max(date), format(date, "%b,\n%Y"), as.character(NA))) %>%
+  mutate(color_pandemic = if_else(year(date)>=2021, "2021-","2000-2020")) %>%
+  mutate(last_value = if_else(date==max(date),v_u, as.double(NA))) %>%
+  
+  ggplot(aes(v_u,core_cpi,label=label)) + geom_point(aes(color=color_pandemic)) + theme_lass +
+  geom_line(aes(v_u, predicted), show.legend = FALSE) +
+  geom_path(aes(recent_v_u,core_cpi), color="pink") + geom_text_repel(color="pink") +
+  geom_point(aes(last_value,core_cpi), color="pink",show.legend = FALSE) +
+  scale_y_continuous(labels = percent) +
+  labs(title="Sliding off the Nonlinear Beveridge-Phillips Curve",
+       subtitle="3-month core CPI change versus Vacancies-to-Unemployment Ratio, 2000 - Current",
+       x="Vacancy-to-unemployment ratio", y="3-month core CPI change",
+       caption="BLS, Seasonally Adjusted, Mike Konczal, Roosevelt Institute") +
+  theme(axis.text.x = element_text(size=15, face="bold"),
+        axis.text.y = element_text(size=15, face="bold"),
+        axis.title.x = element_text(size=15, margin = margin(t = 20, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=14, angle = 90, color="white", vjust = 3)) +
+  theme(panel.grid.minor = element_blank()) + theme(panel.grid.major = element_blank()) +
+  theme(legend.position = c(0.7,0.8))
+
+ggsave("graphics/jolts_PC.png", width = 12, height=12, dpi="retina")
+
+
+
+
+nhs <-
+  cpi_data %>% filter(date > "1999-12-01", seasonal == "S", item_name %in% c("Services less energy services", "Shelter", "Commodities less food and energy commodities")) %>%
+  mutate(item_name = str_replace_all(item_name, "Commodities less food and energy commodities","Core_goods")) %>%
+  select(date, item_name, value, weight) %>%
+  group_by(item_name) %>%
+  mutate(Pchange1 = (value/lag(value)-1)) %>%
+  mutate(Pchange1a = (1 + Pchange1)^12 - 1) %>%
+  mutate(Wchange1 = (Pchange1*weight)/100) %>%
+  mutate(Wchange1a = (1 + Wchange1)^12 - 1) %>%
+  ungroup() %>%
+  group_by(date) %>%
+  summarize(nhsWP1 = Wchange1[item_name == "Services less energy services"] - Wchange1[item_name == "Shelter"],
+            nhs_weight = weight[item_name == "Services less energy services"] - weight[item_name == "Shelter"],
+            nhs_weight = nhs_weight/100
+  ) %>%
+  ungroup() %>%
+  mutate(nhsWP1A = nhsWP1/nhs_weight) %>%
+  mutate(nhsWP1A = (nhsWP1A+1)^12-1) %>%
+  mutate(index = nhsWP1/nhs_weight+1) %>% filter(!is.na(index)) %>%
+  mutate(index = cumprod(index)) %>%
+  select(date, cpi_value = nhsWP1A) %>% mutate(type = "Non-housing services")
+  
+  
+nhs
+
+
+factor_df <- cpi_data %>% filter(seasonal == "S", item_name == "Commodities less food and energy commodities") %>%
+  mutate(cpi_value = value/lag(value,1), cpi_value = cpi_value^12-1) %>%
+  select(date, cpi_value) %>% mutate(type = "Core goods") %>%
+  rbind(nhs) %>%
+  left_join(jolts_pc, by="date") %>%
+  na.omit()
+  
+a <- lm(cpi_value ~ I(v_u^2), data=factor_df[type=="Non-housing services"])
+summary(a)
+factor_df$predicted <- predict(a, factor_df)
+
+factor_df %>%
+  mutate(recent = date > max(date) %m-% months(4)) %>%
+  mutate(recent_v_u = if_else(recent, v_u, as.double(NA))) %>%
+  mutate(label = if_else(date==max(date), format(date, "%b,\n%Y"), as.character(NA))) %>%
+  mutate(color_pandemic = if_else(year(date)>=2021, "2021-","2000-2020")) %>%
+  mutate(last_value = if_else(date==max(date),v_u, as.double(NA))) %>%
+  
+  ggplot(aes(v_u,cpi_value,label=label)) + geom_point(aes(color=color_pandemic)) + theme_lass + facet_wrap(~type) +
+  geom_line(aes(v_u, predicted), show.legend = FALSE) +
+  geom_path(aes(recent_v_u,cpi_value), color="pink") + geom_text_repel(color="pink") +
+  geom_point(aes(last_value,cpi_value), color="pink",show.legend = FALSE) +
+  scale_y_continuous(labels = percent) +
+  labs(title="Sliding off the Nonlinear Beveridge-Phillips Curve",
+       subtitle="3-month core CPI change versus Vacancies-to-Unemployment Ratio, 2000 - Current",
+       x="Vacancy-to-unemployment ratio", y="3-month core CPI change",
+       caption="BLS, Seasonally Adjusted, Mike Konczal, Roosevelt Institute") +
+  theme(axis.text.x = element_text(size=15, face="bold"),
+        axis.text.y = element_text(size=15, face="bold"),
+        axis.title.x = element_text(size=15, margin = margin(t = 20, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=14, angle = 90, color="white", vjust = 3)) +
+  theme(panel.grid.minor = element_blank()) + theme(panel.grid.major = element_blank()) +
+  theme(legend.position = c(0.7,0.8))
+
+

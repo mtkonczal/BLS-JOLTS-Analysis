@@ -47,11 +47,11 @@ jolts_pc <- jolts_pc %>% left_join(core_cpi_tibble, by="date")
 supply <- read_csv("data/supply_chains.csv") %>% select(-date_full)
 jolts_pc <- jolts_pc %>% left_join(supply, by="date")
 
-jolts_pc_lm <- lm(core_cpi ~ I(v_u^2) + supply_chains, data=jolts_pc)
+jolts_pc_lm <- lm(core_cpi ~ I(v_u^2), data=jolts_pc)
 summary(jolts_pc_lm)
 
-jolts_pc_lm <- lm(core_cpi ~ v_u + supply_chains, data=jolts_pc)
-summary(jolts_pc_lm)
+#jolts_pc_lm <- lm(core_cpi ~ v_u + supply_chains, data=jolts_pc)
+#summary(jolts_pc_lm)
 
 
 jolts_pc$predicted <- predict(jolts_pc_lm, jolts_pc)
@@ -79,6 +79,83 @@ jolts_pc %>% mutate(recent = date > max(date) %m-% months(4)) %>%
   theme(legend.position = c(0.7,0.8))
 
 ggsave("graphics/jolts_PC.png", width = 12, height=12, dpi="retina")
+
+
+#### Same but with quits rate ####
+
+#### Phillips Curve - Overall ####
+jolts_pc <- jolts %>% filter(series_id == "JTS000000000000000QUR") %>%
+  mutate(quits = value) %>%
+  select(date, quits)
+
+jolts_pc <- jolts %>% filter(series_id == "JTS000000000000000QUL") %>%
+  mutate(quits = value) %>%
+  select(date, quits)
+
+getSymbols("PAYEMS", src = "FRED")
+employ <- data.frame(date=index(PAYEMS), core_cpi=coredata(PAYEMS))
+
+
+getSymbols("CPILFESL", src = "FRED")
+core_cpi_df <- data.frame(date=index(CPILFESL), core_cpi=coredata(CPILFESL))
+core_cpi_tibble <- as_tibble(core_cpi_df) %>% rename( core_cpi = CPILFESL) %>%
+  mutate(core_cpi = core_cpi/lag(core_cpi,3), core_cpi = core_cpi^4-1)
+
+jolts_pc <- jolts_pc %>% left_join(core_cpi_tibble, by="date")
+supply <- read_csv("data/supply_chains.csv") %>% select(-date_full)
+jolts_pc <- jolts_pc %>%
+  left_join(supply, by="date") %>%
+  left_join(employ, by="date") %>%
+  mutate(quits = quits/PAYEMS) 
+
+jolts_pc_lm <- lm(core_cpi ~ quits + I(quits^2), data=jolts_pc)
+summary(jolts_pc_lm)
+
+#jolts_pc_lm <- lm(core_cpi ~ v_u + supply_chains, data=jolts_pc)
+#summary(jolts_pc_lm)
+
+
+jolts_pc$predicted <- predict(jolts_pc_lm, jolts_pc)
+
+jolts_pc %>% mutate(recent = date > max(date) %m-% months(4)) %>%
+  mutate(recent_quits = if_else(recent, quits, as.double(NA))) %>%
+  mutate(label = if_else(date==max(date), format(date, "%b,\n%Y"), as.character(NA))) %>%
+  mutate(color_pandemic = if_else(year(date)>=2021, "2021-","2000-2020")) %>%
+  mutate(last_value = if_else(date==max(date),quits, as.double(NA))) %>%
+  
+  ggplot(aes(quits,core_cpi,label=label)) + geom_point(aes(color=color_pandemic)) + theme_lass +
+  geom_line(aes(quits, predicted), show.legend = FALSE) +
+  geom_path(aes(recent_quits,core_cpi), color="white") + geom_text_repel(color="white") +
+  geom_point(aes(last_value,core_cpi), color="white",show.legend = FALSE) +
+  scale_y_continuous(labels = percent) +
+  labs(title="Sliding off the Nonlinear Beveridge-Phillips Curve",
+       subtitle="3-month core CPI change versus Quits Rate, 2000 - Current",
+       x="Quit Rate", y="3-month core CPI change",
+       caption="BLS, Seasonally Adjusted, Mike Konczal, Roosevelt Institute") +
+  theme(axis.text.x = element_text(size=15, face="bold"),
+        axis.text.y = element_text(size=15, face="bold"),
+        axis.title.x = element_text(size=15, margin = margin(t = 20, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=14, angle = 90, color="white", vjust = 3)) +
+  theme(panel.grid.minor = element_blank()) + theme(panel.grid.major = element_blank()) +
+  theme(legend.position = c(0.7,0.8)) +
+  scale_x_continuous(labels = percent)
+
+ggsave("graphics/jolts_PC_quits.png", width = 12, height=12, dpi="retina")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #### Phillips Curve - Factors ####
 jolts_pc <- jolts %>% filter(series_id == "JTS000000000000000JOR") %>%

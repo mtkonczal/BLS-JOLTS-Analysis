@@ -39,6 +39,17 @@ theme_lass <-   theme_modern_rc() + theme(legend.position = "none", legend.title
         strip.text = element_text(family="Larsseit"))
 
 
+# Function for downloading data from FRED
+prep_FRED_data <- function(x) {
+  getSymbols(x, src = "FRED")
+  df <- get(x)
+  df <- as_tibble(data.frame(Date = index(df))) %>%
+    bind_cols(setNames(list(as.numeric(df[, x])), x))
+  colnames(df) <- tolower(colnames(df))
+  return(df)
+}
+
+
 
 draw_three_headlines <- function(jolts, graphic_title = "Default title", date_breaks_skip = 6){
   
@@ -264,3 +275,87 @@ draw_efficiency_curve <- function(jolts, graphic_title = "Default title", legend
     scale_color_manual(values = c(myline="#E57A77")) +
     scale_x_date(date_labels = "%b\n%Y", breaks = date_breaks)
 }
+
+
+
+
+# List of variables to download
+fred_variables <- c("UNRATE", "CPILFESL", "JTSJOR", "JTSQUR", "PCEPILFE", "JTSQUL", "PAYEMS")
+
+# Download process, doing some manipulations so the characters become variable names
+for (i in fred_variables) {
+  prep_FRED_data(i)
+  data <- prep_FRED_data(i)
+  assign(tolower(i), data, envir = .GlobalEnv)
+  rm(data)
+}
+
+pc_data <- get(tolower(fred_variables[1]))
+# Joining them all into one dataset. This dataset is monthly, with quarterly values missing dates as NA.
+for (i in fred_variables[-1]) {
+  pc_data <- full_join(pc_data, get(tolower(i)), by = "date")
+}
+
+
+pc_data <- pc_data %>%
+  arrange(date) %>%
+  rename(
+    core_cpi = cpilfesl,
+    job_openings = jtsjor,
+    quits = jtsqur,
+    core_pce = pcepilfe,
+    quits_level = jtsqul,
+    employment_level = payems
+  ) %>%
+  mutate(
+    core_cpi = (core_cpi / lag(core_cpi, 3))^4 - 1,
+    core_pce = (core_pce / lag(core_pce, 3))^4 - 1,
+    v_u = job_openings / unrate,
+    quits = quits / 100,
+    my_quits = quits_level / employment_level
+  ) %>%
+  na.omit() %>%
+  select(-core_cpi)
+
+
+jo_pc_lm <- lm(core_pce ~ my_quits + I(my_quits^2), data = pc_data)
+summary(jo_pc_lm)
+
+# jolts_pc_lm <- lm(core_cpi ~ v_u + supply_chains, data=jolts_pc)
+# summary(jolts_pc_lm)
+
+
+pc_data$predicted <- predict(jo_pc_lm, pc_data)
+
+pc_data %>%
+  mutate(recent = date > max(date) %m-% months(4)) %>%
+  mutate(recent_quits = if_else(recent, my_quits, as.double(NA))) %>%
+  mutate(label = if_else(date == max(date), format(date, "%b,\n%Y"), as.character(NA))) %>%
+  mutate(color_pandemic = if_else(year(date) >= 2021, "2021-", "2000-2020")) %>%
+  mutate(last_value = if_else(date == max(date), my_quits, as.double(NA))) %>%
+  ggplot(aes(my_quits, core_pce, label = label)) +
+  theme_lass +
+  geom_point(aes(color = color_pandemic)) +
+  geom_line(aes(my_quits, predicted), show.legend = FALSE) +
+  geom_path(aes(recent_quits, core_pce), color = "palegreen") +
+  geom_text_repel(color = "palegreen") +
+  geom_point(aes(last_value, core_pce), color = "palegreen", show.legend = FALSE) +
+  scale_y_continuous(labels = percent) +
+  scale_x_continuous(labels = percent) +
+  labs(
+    title = "Back to where we started?",
+    subtitle = "3-month core PCE change versus Quits, 2000 - Current, Regression line is quits + quits^2.",
+    x = "Quits Rate", y = "3-month core PCE change",
+    caption = "BLS, Seasonally Adjusted, Quits rate taken as quits level over CES employment level. Mike Konczal, Roosevelt Institute"
+  ) +
+  theme(
+    axis.text.x = element_text(size = 15, face = "bold"),
+    axis.text.y = element_text(size = 15, face = "bold"),
+    axis.title.x = element_text(size = 15, margin = margin(t = 20, r = 0, b = 0, l = 0)),
+    axis.title.y = element_text(size = 14, angle = 90, color = "white", vjust = 3)
+  ) +
+  theme(panel.grid.minor = element_blank()) +
+  theme(panel.grid.major = element_blank()) +
+  theme(legend.position = c(0.7, 0.8))
+
+ggsave("graphics/jolts_PC_quits.png", width = 12, height = 8, dpi = "retina")

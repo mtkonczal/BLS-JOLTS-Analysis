@@ -111,7 +111,7 @@ pc_data %>%
   geom_point(aes(color = color_pandemic)) +
   geom_line(aes(v_u, predicted), show.legend = FALSE) +
   geom_path(aes(recent_v_u, core_pce), color = "pink") +
-  geom_text_repel(color = "pink") +
+  geom_text_repel(color = "pink", size = 5) +
   geom_point(aes(last_value, core_pce), color = "pink", show.legend = FALSE) +
   scale_y_continuous(labels = percent) +
   labs(

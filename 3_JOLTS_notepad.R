@@ -4,7 +4,7 @@ library(janitor)
 library(tidyverse)
 library(ggtext)
 
-source("1_load_jolts_data.R")
+source("scripts/01_read_jolts.R")
 #source("1_b_JOLTS_ECI_data.R")
 
 
@@ -58,3 +58,31 @@ b <- jolts %>% filter(!is.na(date), seasonal == "S") %>% group_by(state_text, se
 a <- jolts %>% filter(state_text == "Illinois", !is.na(date)) %>% filter(date == max(date))
 
 View((a[date==max(date)])
+     
+     
+
+     
+jolts %>%
+  filter(series_id %in% c("JTS100000000000000HIR", "JTS100000000000000QUR", "JTS000000000000000LDR", "JTS000000000000000OSR")) %>%
+  filter(date > "2016-01-01") %>%
+  ggplot(aes(date,value,color=dataelement_text)) + geom_line() + theme_classic()
+  
+# View(jolts %>% filter(date == "2023-01-01"))
+
+jolts %>%
+  filter(series_id %in% c("JTS100000000000000HIR", "JTS100000000000000QUR", "JTS000000000000000LDR")) %>%
+  group_by(date) %>%
+  summarize(hires = value[series_id=="JTS100000000000000HIR"],
+            layoffs_quits = value[series_id=="JTS100000000000000QUR"] + value[series_id=="JTS000000000000000LDR"]) %>%
+  ggplot() +
+  geom_line(aes(date, hires),color="red") +
+  geom_line(aes(date, layoffs_quits),color="blue")
+
+jolts %>%
+  filter(series_id %in% c("JTS100000000000000HIR", "JTS100000000000000QUR", "JTS000000000000000LDR")) %>%
+  group_by(date) %>%
+  summarize(hires = value[series_id=="JTS100000000000000HIR"],
+            layoffs_quits = value[series_id=="JTS100000000000000QUR"] + value[series_id=="JTS000000000000000LDR"]) %>%
+  mutate(diff = hires - layoffs_quits) %>%
+  ggplot(aes(date,diff)) + geom_line() + theme_classic() +
+           geom_hline(yintercept = 0)

@@ -30,7 +30,7 @@ theme_lass <-   theme_modern_rc() + theme(legend.position = "none", legend.title
 
 
 
-source("1_a_load_jolts_data.R")
+source("scripts/01_read_jolts.R")
 
 
 #### Phillips Curve - Overall ####
@@ -260,3 +260,5 @@ factor_df %>%
         axis.title.y = element_text(size=14, angle = 90, color="white", vjust = 3)) +
   theme(panel.grid.minor = element_blank()) + theme(panel.grid.major = element_blank()) +
   theme(legend.position = c(0.7,0.8))
+
+
